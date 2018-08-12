@@ -34,7 +34,8 @@ class File:
             ["mediainfo --Inform=\"General;%Title%\" \"" + filepath + "\""],
             universal_newlines=True,
             shell=True,
-            stdout=subprocess.PIPE)
+            stdout=subprocess.PIPE
+        )
         log.debug(file_metadata)
 
         # Store the current title
@@ -46,5 +47,32 @@ class File:
         self.set_metadata_title = self.current_metadata_title
 
     def apply_changes(self):
-        '''Applies the new values for the video file.'''
-        pass
+        # Method to apply the new values to the video
+
+        # Build the string to call mkvpropedit and set the metadata correctly
+        shell_command = ''.join(["mkvpropedit \"",
+                                 self.current_path,
+                                 "\" --edit info --set \"title=",
+                                 self.set_metadata_title,
+                                 "\""]
+                                )
+
+        # Call mkvpropedit and set the metadata
+        result = subprocess.run(
+            [shell_command],
+            universal_newlines=True,
+            shell=True,
+            stdout=subprocess.PIPE
+        )
+
+        # If the returned is 0, edit was successful
+        if result.returncode == 0:
+            return 0
+        # If 1, there was a warning generated
+        elif result.returncode == 1:
+            log.warning(result.stdout)
+            return 1
+        # If 2, the edit failed and there was an error
+        else:
+            log.error(result.stdout)
+            return 2

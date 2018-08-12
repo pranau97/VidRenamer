@@ -29,6 +29,8 @@ def process_individual(mkv_list):
     # This method takes all the mkv files in a given directory
     # and gives the user the option to edit them one by one.
 
+    # TODO: Split the method into smaller pieces
+
     # List to store all the video file objects
     videos = []
 
@@ -60,7 +62,8 @@ def process_individual(mkv_list):
             # Accept user input for the new video title
             temp = input(
                 "Enter the new MKV segment title "
-                "(Press ENTER to skip, \\ to copy filename) ")
+                "(Press ENTER to skip, \\ to copy filename) "
+            )
             # Process the input
             # If the input is empty, do nothing
             if not temp:
@@ -82,7 +85,8 @@ def process_individual(mkv_list):
             # next files or quit
             process = input(
                 "Press r to redo, s to stop processing, e to exit, "
-                "ENTER to continue ")
+                "ENTER to continue "
+            )
             # Process the input
             # If the input is empty, go to the next file
             if not process:
@@ -129,15 +133,19 @@ def process_individual(mkv_list):
         # Apply changes made to the videos iteratively
         for video in updated_videos:
             status_code = video.apply_changes()
-            # Continue silently if there is no error reported
-            if not status_code == 1:
-                log.info("Applied change for video - " +
-                         str(video.current_path))
             # Raise an error and stop further processing on error
-            else:
+            if status_code == 2:
                 log.error("Error while applying changes to " +
                           str(video.current_path))
                 return 1
+            # Raise a warning and continue if there is a warning
+            elif status_code == 1:
+                log.warning("Warning while applying changes to " +
+                            str(video.current_path))
+            # Continue silently if there is no error reported
+            else:
+                log.info("Applied change for video - " +
+                         str(video.current_path))
 
         # Confirm that changes have been applied
         print("Applied changes to {0} videos.".format(
@@ -181,9 +189,11 @@ def run(dirpath):
     process = input("Single mode or pattern mode? (s/p) ")
     # If single is selected, call process_individual()
     if process.lower() in ["single", "s"]:
+        clrscr()
         status_code = process_individual(mkv_list)
     # If pattern is selected, call process_pattern()
     elif process.lower() in ["pattern", "p"]:
+        clrscr()
         pass
     # Else, raise an error for providing an invalid option
     else:
@@ -211,7 +221,8 @@ if __name__ == "__main__":
         '-p',
         '--path',
         default=None,
-        help='Enter the directory path to the file(s) to edit.')
+        help='Enter the directory path to the file(s) to edit.'
+    )
     # Parse the command line arguments
     args = parser.parse_args()
 
@@ -230,6 +241,7 @@ if __name__ == "__main__":
         process = input("Restart? (y/n) ")
         if process.lower() in ['yes', 'y']:
             log.info("Restarting...")
+            clrscr()
             continue
         else:
             log.info("Exiting...")
