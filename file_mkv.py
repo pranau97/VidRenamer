@@ -1,7 +1,7 @@
 '''
-Module that defines the File class and its member methods.
+Module that defines the Matroska class and its member methods.
 
-The File class describes a video. It holds the current path, filename
+The Matroska class describes a mkv video. It holds the current path, filename
 and title of a video and the corresponding values set by the user while
 editing the video.
 
@@ -12,12 +12,14 @@ Requires - mediainfo, mkvpropedit
 import os
 import logging
 import subprocess
+
+# Configure the logger object and set logging level
 logging.basicConfig(level=logging.DEBUG)
-log = logging.getLogger(__name__)
+log = logging.getLogger("matroska")
 
 
-class File:
-    # Class to handle all the operations related to a single video file
+class Matroska:
+    # Class to handle all the operations related to a single mkv video file
 
     def __init__(self, filepath):
         # Store the current filename
@@ -46,7 +48,7 @@ class File:
         # Store the title entered by the user
         self.set_metadata_title = self.current_metadata_title
 
-    def apply_changes(self):
+    def update_fields(self):
         # Method to apply the new values to the video
 
         # Build the string to call mkvpropedit and set the metadata correctly
@@ -69,10 +71,11 @@ class File:
         if result.returncode == 0:
             return 0
         # If 1, there was a warning generated
-        elif result.returncode == 1:
-            log.warning(result.stdout)
+        if result.returncode == 1:
+            log.warning("mkvpropedit: " + result.stdout)
+            log.warning(self.current_path)
             return 1
-        # If 2, the edit failed and there was an error
-        else:
-            log.error(result.stdout)
-            return 2
+        # Else, the edit failed and there was an error
+        log.error("mkvpropedit:" + result.stdout)
+        log.error(self.current_path)
+        return 2

@@ -1,28 +1,64 @@
 '''
-Script to batch edit MKV files' metadata.
+Script to batch edit video files' metadata.
 Current plans include -
  * Edit filename, file title, directory
  * Batch rename folders
  * Provide customizable renaming schemes.
 
-REQUIRES - mkvpropedit, mediainfo
+Requires - mkvpropedit, mediainfo, mutagen
 '''
 
 import os
 import argparse
 import logging
 import subprocess
+# import mutagen
 from glob import glob
-from file import File
+from clrscr import clrscr
+from file_mkv import Matroska
 
 # Configure the logger object and set logging level
 logging.basicConfig(level=logging.DEBUG)
-log = logging.getLogger(__name__)
+log = logging.getLogger("run")
 
 
-def clrscr():
-    # Method to clear the terminal screen
-    _ = os.system('cls' if os.name == 'nt' else 'clear')
+def apply_changes(videos):
+    # Method to apply changes to queued edits
+
+    # Store the total number of edited videos
+    total_updated = len(videos)
+    # Display the queued videos to be modified
+    print("About to apply changes to {0} videos.".format(
+        total_updated))
+    for video in videos:
+        print(video.current_filename, ": ")
+        print(video.current_metadata_title, "->", video.set_metadata_title)
+    # Prompt for confirmation
+    process = input("Continue? (y/n) ")
+    clrscr()
+
+    # If user agrees, apply changes
+    if process.lower() in ["yes", "y"]:
+        # Apply changes made to the videos iteratively
+        for video in videos:
+            status_code = video.update_fields()
+            # Raise an error and stop further processing on error
+            if status_code == 2:
+                return 1
+            # Continue silently if there is no error reported
+            log.debug("Applied change for video - " + str(video.current_path))
+
+        # Confirm that changes have been applied
+        print("Applied changes to {0} videos.".format(
+            total_updated))
+    # Else, discard all changes and return
+    else:
+        log.debug("Changes discarded.")
+        print("Changes discarded.")
+
+    # Prompt for user input to continue
+    input("Press ENTER to continue")
+    return 0
 
 
 def process_individual(mkv_list):
@@ -36,7 +72,7 @@ def process_individual(mkv_list):
 
     # Instantiate objects to store the video data
     for i in mkv_list:
-        videos.append(File(i))
+        videos.append(Matroska(i))
 
     process_count = 1
     update_count = 0
@@ -50,7 +86,7 @@ def process_individual(mkv_list):
     # Accept user inputs for the files
     for video in videos:
         while True:
-            log.info("Processing file no. " + str(process_count))
+            log.debug("Processing file no. " + str(process_count))
 
             # Print file info
             print("File {0} of {1}".format(
@@ -116,48 +152,12 @@ def process_individual(mkv_list):
             break
         stop_flag = False
 
-    # Store the total number of edited videos
-    total_updated = len(updated_videos)
-    # Display the queued videos to be modified
-    print("About to apply changes to {0} videos.".format(
-        total_updated))
-    for video in updated_videos:
-        print(video.current_filename, ": ")
-        print(video.current_metadata_title, "->", video.set_metadata_title)
-    # Prompt for confirmation
-    process = input("Continue? (y/n) ")
-    clrscr()
-
-    # If user agrees, apply changes
-    if process.lower() in ["yes", "y"]:
-        # Apply changes made to the videos iteratively
-        for video in updated_videos:
-            status_code = video.apply_changes()
-            # Raise an error and stop further processing on error
-            if status_code == 2:
-                log.error("Error while applying changes to " +
-                          str(video.current_path))
-                return 1
-            # Raise a warning and continue if there is a warning
-            elif status_code == 1:
-                log.warning("Warning while applying changes to " +
-                            str(video.current_path))
-            # Continue silently if there is no error reported
-            else:
-                log.info("Applied change for video - " +
-                         str(video.current_path))
-
-        # Confirm that changes have been applied
-        print("Applied changes to {0} videos.".format(
-            total_updated))
-    # Else, discard all changes and return
+    # Call the function to apply the edits that have been made
+    if len(updated_videos) > 0:
+        status_code = apply_changes(updated_videos)
     else:
-        log.info("Changes discarded.")
-        print("Changes discarded.")
-
-    # Prompt for user input to continue
-    input("Press ENTER to continue")
-    return 0
+        status_code = 0
+    return status_code
 
 
 def run(dirpath):
@@ -165,10 +165,10 @@ def run(dirpath):
 
     # Accept a path if not entered via the command line
     wd = dirpath or input("Enter the directory path to the file(s): ")
-
+    wd = os.path.expanduser(wd)
     # Check if it is a valid directory and change
     # current working directory to it
-    if os.path.isdir(wd):
+    if os.path.isdir(wd) or os.path.isdir(os.getcwd() + wd):
         os.chdir(wd)
     else:
         log.error("Directory not found.")
@@ -176,8 +176,9 @@ def run(dirpath):
 
     # Recursively search the current working directory and subdirectories
     # for files ending with a .mkv extension
-    mkv_list = [y for x in os.walk(os.getcwd())
-                for y in glob(os.path.join(x[0], '*.mkv'))]
+    mkv_list = glob('**/*.mkv', recursive=True)
+    # mp4_list = glob('**/*.mp4', recursive=True)
+    # avi_list = glob('**/*.mp4', recursive=True)
 
     ''' Prompt user input to run the script in one of two currently supported
         modes.
@@ -186,13 +187,13 @@ def run(dirpath):
         2 - Pattern mode. This mode lets the user specify a pattern or rule
         which will be used to edit the mkv files in the given directory.
     '''
-    process = input("Single mode or pattern mode? (s/p) ")
+    process = input("Single mode or batch mode? (s/b) ")
     # If single is selected, call process_individual()
     if process.lower() in ["single", "s"]:
         clrscr()
         status_code = process_individual(mkv_list)
     # If pattern is selected, call process_pattern()
-    elif process.lower() in ["pattern", "p"]:
+    elif process.lower() in ["batch", "b"]:
         clrscr()
         pass
     # Else, raise an error for providing an invalid option
@@ -205,23 +206,29 @@ def run(dirpath):
     if status_code == 1:
         log.error("Error while processing files")
         return 1
-    else:
-        return 0
+
+    return 0
 
 
 if __name__ == "__main__":
     # Add config for the argument parsing library
     parser = argparse.ArgumentParser(
-        description="Batch edit MKV files's metadata")
+        description="Batch edit video files' metadata")
+    # TODO: Add more command line arguments to automate the script
     # Add argument to directly launch the script with a path
     # instead of interactively accepting it via user input
-    # TODO: Add more command line arguments to automate the script
-    # TODO: Add restart argument
     parser.add_argument(
         '-p',
         '--path',
         default=None,
         help='Enter the directory path to the file(s) to edit.'
+    )
+    # Add argument to terminate the script after 1 run
+    parser.add_argument(
+        '-r',
+        '--no_restart',
+        action='store_true',
+        help='Stop restarting the script after a batch job is complete.'
     )
     # Parse the command line arguments
     args = parser.parse_args()
@@ -237,12 +244,15 @@ if __name__ == "__main__":
         # can be accepted via user input
         args.path = None
 
-        # Accept user input to restart the script to edit new files
+        # Accept user input to restart the script to edit new files if not
+        # already specified in the command line
+        if args.no_restart:
+            break
         process = input("Restart? (y/n) ")
-        if process.lower() in ['yes', 'y']:
-            log.info("Restarting...")
+        if process.lower() in ['yes', 'y', False]:
+            log.debug("Restarting...")
             clrscr()
             continue
         else:
-            log.info("Exiting...")
+            log.debug("Exiting...")
             break
