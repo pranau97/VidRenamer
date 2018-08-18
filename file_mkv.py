@@ -10,18 +10,15 @@ Requires - mediainfo, mkvpropedit
 
 
 import os
-import logging
 import subprocess
-
-# Configure the logger object and set logging level
-logging.basicConfig(level=logging.DEBUG)
-log = logging.getLogger("matroska")
+from _logs import error, warning, debug
 
 
 class Matroska:
-    # Class to handle all the operations related to a single mkv video file
+    '''Class to handle all the operations related to a single mkv video file'''
 
     def __init__(self, filepath):
+
         # Store the current filename
         self.current_filename = os.path.basename(filepath)
         # Store the filename set by the user
@@ -38,18 +35,23 @@ class Matroska:
             shell=True,
             stdout=subprocess.PIPE
         )
-        log.debug(file_metadata)
+        debug(str(file_metadata), "matroska")
+
+        # Check if the mediainfo command ran successfully
+        # by looking at the return code
+        if file_metadata.returncode:
+            warning("Mediainfo failed to run correctly.", "matroska")
 
         # Store the current title
-        if not file_metadata.stdout:
+        if file_metadata.returncode or file_metadata.stdout == '\n':
             self.current_metadata_title = "N/A"
         else:
             self.current_metadata_title = file_metadata.stdout.splitlines()[0]
         # Store the title entered by the user
         self.set_metadata_title = self.current_metadata_title
 
-    def update_fields(self):
-        # Method to apply the new values to the video
+    def update_metadata_fields(self):
+        '''Method to apply the new metadata values to the video'''
 
         # Build the string to call mkvpropedit and set the metadata correctly
         shell_command = ''.join(["mkvpropedit \"",
@@ -58,8 +60,6 @@ class Matroska:
                                  self.set_metadata_title,
                                  "\""]
                                 )
-
-        # Call mkvpropedit and set the metadata
         result = subprocess.run(
             [shell_command],
             universal_newlines=True,
@@ -67,15 +67,28 @@ class Matroska:
             stdout=subprocess.PIPE
         )
 
-        # If the returned is 0, edit was successful
         if result.returncode == 0:
+            self.current_metadata_title = self.set_metadata_title
             return 0
-        # If 1, there was a warning generated
         if result.returncode == 1:
-            log.warning("mkvpropedit: " + result.stdout)
-            log.warning(self.current_path)
+            warning("mkvpropedit: " + result.stdout, "matroska")
+            warning(self.current_path, "matroska")
+            self.current_metadata_title = self.set_metadata_title
             return 1
-        # Else, the edit failed and there was an error
-        log.error("mkvpropedit:" + result.stdout)
-        log.error(self.current_path)
+        error("mkvpropedit:" + result.stdout, "matroska")
+        error(self.current_path, "matroska")
         return 2
+
+    def update_file_fields(self):
+        '''Method to apply the new filename and path to the video'''
+
+        try:
+            os.renames(self.current_path, self.set_path)
+            self.current_path = self.set_path
+            self.current_filename = self.set_filename
+        except OSError:
+            error("Failed to rename the file", "matroska")
+            error(self.current_path, "matroska")
+            return 1
+
+        return 0
