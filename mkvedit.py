@@ -1,4 +1,4 @@
-#! /usr/bin/python3.6
+#! python3.6
 '''
 Script to batch edit video files' metadata.
 Can currently perform the following
@@ -103,7 +103,7 @@ def process_individual(video_list):
 
             temp = input(
                 "Enter the new video path "
-                "(Press ENTER to skip)"
+                "(Press ENTER to skip) "
             )
             if temp:
                 path = normalize_path(temp)
@@ -122,10 +122,12 @@ def process_individual(video_list):
             elif temp:
                 video.set_metadata_title = temp
 
+            # Add only those videos that have been updated
             if (video.current_filename != video.set_filename) or (
                     video.current_metadata_title != video.set_metadata_title):
                 updated_videos.append(video)
                 update_count += 1
+
             process = input(
                 "Press r to redo, s to stop processing, e to exit, "
                 "ENTER to continue "
@@ -161,75 +163,92 @@ def process_batch_metadata(video_list):
     give the user the option to edit them in a batch
     '''
 
-    # Accept pattern to edit metadata
-    if not args.m_pattern:
-        print(
-            COLOR["CYAN"] + "METADATA PATTERN" + COLOR["END"] + "\n"
-            "{dir:d} - directory based numbering, {file:d} file based numbering" + "\n"
-            "Example - Person of Interest S{dir:02d}E{file:02d} -> Person of Interest S01E01"
-        )
-    m_pattern = args.m_pattern or input(
-        "Enter the metadata pattern (\\ to skip) ")
-    debug(m_pattern, "run")
-
-    # Accept metadata to edit filenames
-    if not args.f_pattern:
-        print(
-            COLOR["CYAN"] + "FILE PATTERN" + COLOR["END"] + "\n"
-            "{dir:d} - directory based numbering, {file:d} file based numbering" + "\n"
-            "Example - Person of Interest S{dir:02d}E{file:02d}.mkv -> "
-            "Person of Interest S01E01.mkv\n"
-            "Pattern must translate to a valid path"
-        )
-    f_pattern = args.f_pattern or input("Enter the file pattern (\\ to skip) ")
-    debug(f_pattern, "run")
-
     # Store the list of videos in the current directory
     videos = []
     for file in video_list:
         videos.append(Matroska(os.getcwd() + "/" + file))
 
-    # Accept custom offsets for filenames and metadata
-    # TODO: Add support for per directory file offsets
-    if args.offset == "True":
-        directory_offset = input("Enter directory offset (optional) ") or 1
-        file_offset = input("Enter file offset (optional) ") or 1
-    elif args.offset == "False":
-        directory_offset = 1
-        file_offset = 1
-    else:
-        try:
-            # Try literal evaluation of the argument and store in tuple
-            tup = literal_eval(args.offset)
-        except:
-            error("Invalid offsets passed.", "run")
-            return 1
-        directory_offset = tup[0]
-        file_offset = tup[1]
+    while True:
+        # Accept pattern to edit metadata
+        if not args.m_pattern:
+            print(
+                COLOR["CYAN"] + "METADATA PATTERN" + COLOR["END"] + "\n"
+                "{dir:d} - directory based numbering, {file:d} "
+                "file based numbering" + "\n"
+                "Example - Person of Interest S{dir:02d}E{file:02d} -> "
+                "Person of Interest S01E01"
+            )
+        m_pattern = args.m_pattern or input(
+            "Enter the metadata pattern (\\ to skip) ")
+        debug(m_pattern, "run")
 
-    # Store current video's current path
-    current_path = os.path.dirname(videos[0].current_path)
-    for video in videos:
-        # Increment directory offset and reset file offset when
-        # the directory of the previous video doesn't match the current
-        if os.path.dirname(video.current_path) != current_path:
-            current_path = os.path.dirname(video.current_path)
-            directory_offset += 1
+        # Accept metadata to edit filenames
+        if not args.f_pattern:
+            print(
+                COLOR["CYAN"] + "FILE PATTERN" + COLOR["END"] + "\n"
+                "{dir:d} - directory based numbering, {file:d} "
+                "file based numbering" + "\n"
+                "Example - Person of Interest S{dir:02d}E{file:02d}.mkv -> "
+                "Person of Interest S01E01.mkv\n"
+                "Pattern must translate to a valid path"
+            )
+        f_pattern = args.f_pattern or input(
+            "Enter the file pattern (\\ to skip) ")
+        debug(f_pattern, "run")
+
+        # Accept custom offsets for filenames and metadata
+        # TODO: Add support for per directory file offsets
+        if args.offset == "True":
+            directory_offset = input("Enter directory offset (optional) ") or 1
+            file_offset = input("Enter file offset (optional) ") or 1
+        elif args.offset == "False":
+            directory_offset = 1
             file_offset = 1
-            debug(current_path, "run")
-        if m_pattern != "\\":
-            video.set_metadata_title = m_pattern.format(
-                dir=directory_offset, file=file_offset)
-        if f_pattern != "\\":
-            path = normalize_path(f_pattern.format(
-                dir=directory_offset, file=file_offset
-            ))
-            # Return if the path is invalid
-            if path == 1:
+        else:
+            try:
+                # Try literal evaluation of the argument and store in tuple
+                tup = literal_eval(args.offset)
+            except:
+                error("Invalid offsets passed.", "run")
                 return 1
-            video.set_path = path
-            video.set_filename = os.path.basename(video.set_path)
-        file_offset += 1
+            directory_offset = tup[0]
+            file_offset = tup[1]
+
+        # Store current video's current path
+        current_path = os.path.dirname(videos[0].current_path)
+        for video in videos:
+            # Increment directory offset and reset file offset when
+            # the directory of the previous video doesn't match the current
+            if os.path.dirname(video.current_path) != current_path:
+                current_path = os.path.dirname(video.current_path)
+                directory_offset += 1
+                file_offset = 1
+                debug(current_path, "run")
+            if m_pattern != "\\":
+                video.set_metadata_title = m_pattern.format(
+                    dir=directory_offset, file=file_offset)
+            if f_pattern != "\\":
+                path = normalize_path(f_pattern.format(
+                    dir=directory_offset, file=file_offset
+                ))
+                # Return if the path is invalid
+                if path == 1:
+                    return 1
+                video.set_path = path
+                video.set_filename = os.path.basename(video.set_path)
+            file_offset += 1
+
+        process = input(
+            "Press r to redo, e to exit, ENTER to continue "
+        )
+        if process.lower() == 'r':
+            continue
+        elif process.lower() == 'e':
+            debug("Forced exit by user.", "run")
+            return 0
+
+        clrscr()
+        break
 
     # Call function to apply the changes
     status_code = apply_changes(videos)
@@ -260,13 +279,15 @@ def run():
     # video_list.extend(avi_list)
     video_list.sort()
 
-    ''' Prompt user input to run the script in one of two currently supported
-        modes.
-        1 - Single mode. This mode looks for all mkv files in a given directory
-        and gives the user the option to edit them one by one.
-        2 - Batch mode. This mode lets the user specify a pattern or rule
-        which will be used to edit the mkv files in the given directory.
-    '''
+    if not args.mode:
+        print(
+            ''' Run the script in one of two currently supported modes.\n
+            1 - Single mode. This mode looks for all video files in a given\n
+            directory and gives the user the option to edit them one by one.\n
+            2 - Batch mode. This mode lets the user specify a pattern or rule\n
+            which will be used to edit the video files in the given directory.
+            '''
+        )
     process = args.mode or input("Single mode or batch mode? (s/b) ")
     if process.lower() in ["single", "s"]:
         clrscr()
